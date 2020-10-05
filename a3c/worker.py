@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-
+# -*- encoding: utf-8 -*-
 import sys
 import argparse
 import project_root
@@ -10,12 +10,12 @@ from os import path
 from a3c import A3C
 from env.environment import Environment
 
-
+# 调用generate_trace --> 整数可以直接生成
 def prepare_traces(bandwidth):
     trace_dir = path.join(project_root.DIR, 'env')
 
     if type(bandwidth) == int:
-        if bandwidth != 12:
+        if bandwidth != 12: # 目前只有12Mbps的
             gen_trace = path.join(project_root.DIR, 'helpers',
                                   'generate_trace.py')
             cmd = ['python', gen_trace, '--output-dir', trace_dir,
@@ -26,7 +26,7 @@ def prepare_traces(bandwidth):
         uplink_trace = path.join(trace_dir, '%dmbps.trace' % bandwidth)
         downlink_trace = uplink_trace
     else:
-        trace_path = path.join(trace_dir, bandwidth)
+        trace_path = path.join(trace_dir, bandwidth)    # 非整数的就没法generate的了
         # intentionally switch uplink and downlink traces due to sender first
         uplink_trace = trace_path + '.down'
         downlink_trace = trace_path + '.up'
@@ -35,7 +35,7 @@ def prepare_traces(bandwidth):
 
 
 def create_env(task_index):
-    bandwidth = int(np.linspace(30, 60, num=4, dtype=np.int)[task_index])
+    bandwidth = int(np.linspace(30, 60, num=4, dtype=np.int)[task_index])   # 那得有
     delay = 25
     queue = None
 

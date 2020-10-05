@@ -214,7 +214,7 @@ class Sender(object):
 
                     k=self.compute_performance()
         return k
-
+    # 每轮结束后计算一个值
     def run(self):
         TIMEOUT = 1000  # ms
 
@@ -251,7 +251,7 @@ class Sender(object):
                     if self.window_is_open():
                         self.send()
         return r
-
+    # 稀疏奖励，which is 10*tput - perc_delay
     def compute_performance(self):
         print("****************IN COMPUTE_PERFORMANCE*********************")
         duration = curr_ts_ms() - self.ts_first

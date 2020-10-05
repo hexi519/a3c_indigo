@@ -17,12 +17,12 @@ class Environment(object):
         # variables below will be filled in during setup
         self.sender = None
         self.receiver = None
-
+    # 设置为智能体的策略函数
     def set_sample_action(self, sample_action):
         """Set the sender's policy. Must be called before calling reset()."""
 
         self.sample_action = sample_action
-
+    # 起mahimahi以及UDP程序 ，每次rollout之前要重新起下程序
     def reset(self):
         """Must be called before running rollout()."""
 
@@ -46,12 +46,12 @@ class Environment(object):
 
         # sender completes the handshake sent from receiver
         self.sender.handshake()
-
+    # 跑一次对话相当于一轮，which is 1000步
     def rollout(self):
         """Run sender in env, get final reward of an episode, reset sender."""
 
         sys.stderr.write('Obtaining an episode from environment...\n')
-        return self.sender.run()
+        return self.sender.run()   
 
     def cleanup(self):
         if self.sender:

@@ -22,9 +22,9 @@ import numpy as np
 import operator
 
 
-READ_FLAGS = select.POLLIN | select.POLLPRI
-WRITE_FLAGS = select.POLLOUT
-ERR_FLAGS = select.POLLERR | select.POLLHUP | select.POLLNVAL
+READ_FLAGS = select.POLLIN | select.POLLPRI         # 普通数据可读  高优先级可读
+WRITE_FLAGS = select.POLLOUT        # 普通数据可写
+ERR_FLAGS = select.POLLERR | select.POLLHUP | select.POLLNVAL       # 错误 挂起 空值
 READ_ERR_FLAGS = READ_FLAGS | ERR_FLAGS
 ALL_FLAGS = READ_FLAGS | WRITE_FLAGS | ERR_FLAGS
 
@@ -35,26 +35,25 @@ math_ops = {
     '/': operator.div,
 }
 
-
+# 封装了下operator的包
 def apply_op(op, op1, op2):
     return math_ops[op](op1, op2)
 
-
+# 函数变量epoch记录该epoch的起始时间，返回当前epoch中流逝的时间
 def curr_ts_ms():
     if not hasattr(curr_ts_ms, 'epoch'):
         curr_ts_ms.epoch = time.time()
 
     return int((time.time() - curr_ts_ms.epoch) * 1000)
 
-
+#
 def make_sure_path_exists(path):
     try:
         os.makedirs(path)
     except OSError as e:
         if e.errno != errno.EEXIST:
             raise
-
-
+#
 def get_open_udp_port():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -63,18 +62,16 @@ def get_open_udp_port():
     port = s.getsockname()[1]
     s.close()
     return port
-
-
+#
 def normalize(state):
+    """ 除了最后一个状态是除以5000以外，其他所有都是除以200 """
     return [state[0] / 200.0, state[1] / 200.0,
             state[2] / 200.0, state[3] / 5000.0]
-
-
+#
 def one_hot(action, action_cnt):
     ret = [0.0] * action_cnt
     ret[action] = 1.0
     return ret
-
 
 def softmax(x):
     e_x = np.exp(x - np.max(x))

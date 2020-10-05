@@ -17,7 +17,7 @@ def normalize_state_buf(step_state_buf):
 
     return norm_state_buf
 
-
+# TODO
 def ewma(data, window):
     alpha = 2 /(window + 1.0)
     alpha_rev = 1-alpha
@@ -43,9 +43,9 @@ class A3C(object):
         self.task_index = task_index
         self.env = env
         self.dagger = dagger
-        self.time_file = open('/tmp/sample_action_time', 'w')
+        self.time_file = open('/tmp/sample_action_time', 'w')       # 做决策花销的时(2ms左右)
 
-        self.is_chief = (task_index == 0)
+        self.is_chief = (task_index == 0)   # TODO task=0就都是ps？
         self.worker_device = '/job:worker/task:%d' % task_index
         
         # buffers required to train
@@ -60,7 +60,7 @@ class A3C(object):
             self.check_point =1500 
             self.learn_rate = 1e-3
         else:
-            self.max_global_step = 30
+            self.max_global_step = 30   # TODO　should be longer according to the graph
             self.check_point = 10
             self.learn_rate = 2*1e-5
 
@@ -82,13 +82,15 @@ class A3C(object):
             self.summary_writer = tf.summary.FileWriter(self.logdir)
 
         # create session
-        self.session = tf.Session(self.server.target)
+        self.session = tf.Session(self.server.target) 
         self.session.run(tf.global_variables_initializer())
 
     def cleanup(self):
         self.env.cleanup()
 
+    # 分离局部变量与全局变量(including build_loss
     def build_tf_graph(self):
+        # 参数复制到服务器上去
         with tf.device(tf.train.replica_device_setter(
                 worker_device=self.worker_device,
                 cluster=self.cluster)):
@@ -99,20 +101,20 @@ class A3C(object):
                     'global_step', [], tf.int32,
                     initializer=tf.constant_initializer(0, tf.int32),
                     trainable=False)
-
+        # TODO
         with tf.device(self.worker_device):
             with tf.variable_scope('local'):
                 self.local_network = ActorCriticLSTM(
                     state_dim=self.state_dim, action_cnt=self.action_cnt)
 
             self.build_loss()
-
+    # sparse_softmax_cross_entropy_with_logits 并记录变量total_loss/grad_global_norm/var_global_norm等
     def build_loss(self):
         print("***************************IN BUILD_LOSS**************")
         pi = self.local_network
 
         self.actions = tf.placeholder(tf.int32, [None])
-        # cross entropy loss
+        # cross entropy loss    # TODO sparse
         cross_entropy_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
             logits=pi.action_scores, labels=self.actions)
 
@@ -145,23 +147,23 @@ class A3C(object):
             loss = policy_loss + 0.5 * value_loss - 0.01 * entropy
 
         grads = tf.gradients(loss, pi.trainable_vars)
-        grads, _ = tf.clip_by_global_norm(grads, 10.0)
+        grads, _ = tf.clip_by_global_norm(grads, 10.0)  # TODO clip here
 
         # calculate gradients and apply to global network
         grads_and_vars = list(zip(grads, self.global_network.trainable_vars))
-        inc_global_step = self.global_step.assign_add(1)
+        inc_global_step = self.global_step.assign_add(1)    # 没有放进优化器里所以就手动... # TODO 放进去
 
         optimizer = tf.train.AdamOptimizer(self.learn_rate)
         self.train_op = tf.group(
             optimizer.apply_gradients(grads_and_vars), inc_global_step)
 
-        # sync local network to global network
+        # sync local network to global network # TODO cover instead of update
         self.sync_op = tf.group(*[v1.assign(v2) for v1, v2 in zip(
             pi.trainable_vars, self.global_network.trainable_vars)])
 
         # summary related
         tf.summary.scalar('total_loss', loss)
-        tf.summary.scalar('grad_global_norm', tf.global_norm(grads))
+        tf.summary.scalar('grad_global_norm', tf.global_norm(grads))    # TODO
         tf.summary.scalar('var_global_norm', tf.global_norm(pi.trainable_vars))
 
         if self.dagger:
@@ -186,7 +188,7 @@ class A3C(object):
             return 2
         else:
             return 3
-
+    # 
     def sample_action(self, step_state_buf):
 
         # ravel() is a faster flatten()
@@ -199,6 +201,7 @@ class A3C(object):
         ewma_delay = ewma(flat_step_state_buf, 3)
 
         self.state_buf.extend([ewma_delay])
+        # TODO indice
         last_index = self.indices[-1] if len(self.indices) > 0 else -1
         self.indices.append(1 + last_index)
 
@@ -227,6 +230,7 @@ class A3C(object):
             ops_to_run = [pi.action_probs, pi.state_values]#, pi.lstm_state_out]
 
         start_time = time.time()
+        # 环境变量处理过后(feed_dict),获取状态值和动作概率
         ret = self.session.run(ops_to_run, feed_dict)
         elapsed_time = time.time() - start_time
         self.time_file.write('TF sample_action took: %s s.\n' % elapsed_time)
@@ -234,7 +238,7 @@ class A3C(object):
         if self.dagger:
             action_probs = ret#, lstm_state_out = ret
         else:
-            action_probs, state_values = ret#, lstm_state_out = ret
+            action_probs, state_values = ret    #, lstm_state_out = ret
 
         # choose an action to take and update current LSTM state
         #action = np.argmax(np.random.multinomial(1, action_probs - 1e-5))
@@ -245,10 +249,10 @@ class A3C(object):
         if not self.dagger:
             self.action_buf.append(action)
             self.value_buf.extend(state_values)
-        
 
         return action
 
+    # TODO 同步全局参数到本地，然后保存在本地 
     def save_model(self, check_point=None):
         if check_point is None:
             model_path = path.join(self.logdir, 'model')
@@ -264,7 +268,7 @@ class A3C(object):
         saver = tf.train.Saver(self.local_network.trainable_vars)
         saver.save(self.session, model_path)
         sys.stderr.write('\nModel saved to worker-0:%s\n' % model_path)
-
+    # 调用换几个的rollout(which 就是发包)，which调用了自己的sample_action,所以会存储不少东西
     def rollout(self):
         print("************************IN ROLLOUT**************************")
         # reset buffers for states, actions, LSTM states, etc.
@@ -283,7 +287,7 @@ class A3C(object):
         final_reward = self.env.rollout()
         print(final_reward)
 
-        # state_buf, indices, action_buf, etc. should have been filled in
+        # state_buf, indices, action_buf, etc. should have been filled in【环境在调用env的action的时候，写入了indices中】
         episode_len = len(self.indices)
         # assert len(self.action_buf) == episode_len
 
@@ -304,11 +308,11 @@ class A3C(object):
             self.adv_buf = self.reward_buf.astype("float32") - np.asarray(self.value_buf)
 
     def run(self):
-        pi = self.local_network
+        pi = self.local_network     # ActorCritic LSTM
 
         global_step = 0
         check_point = self.check_point
-        while global_step < self.max_global_step:
+        while global_step < self.max_global_step:   
             sys.stderr.write('Global step: %d\n' % global_step)
 
             # reset local parameters to global
@@ -322,6 +326,7 @@ class A3C(object):
  
 
             if summarize:
+                # TODO self.global_step 覆盖了 self.train_op
                 ops_to_run = [self.train_op, self.global_step, self.summary_op]
             else:
                 ops_to_run = [self.train_op, self.global_step]
@@ -343,7 +348,7 @@ class A3C(object):
                     #pi.lstm_state_in: pi.lstm_state_init,
                 })
 
-            global_step = ret[1]
+            global_step = ret[1]    # TODO
             self.local_step += 1
 
             if summarize:
@@ -353,7 +358,7 @@ class A3C(object):
             if self.is_chief and global_step >= check_point:
                 with tf.device(self.worker_device):
                     self.save_model(check_point)
-                check_point += self.check_point
+                check_point += self.check_point     # 总体只有30步，每次加上10步不过分
 
         if self.is_chief:
             with tf.device(self.worker_device):
