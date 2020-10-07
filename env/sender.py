@@ -1,3 +1,4 @@
+# -*- encoding: utf-8 -*-
 import time
 import sys
 import json
@@ -27,12 +28,13 @@ class Sender(object):
     # RL exposed class/static variables
     max_steps = 1000
     state_dim = 4
-    action_mapping = format_actions(["/2.0", "-10.0", "+0.0", "+10.0", "*2.0"])
+    action_mapping = format_actions(["/4.0","/2.0", "-10.0", "+0.0", "+10.0", "*2.0","*4.0"])
     action_cnt = len(action_mapping)
 
-    def __init__(self, port=0, train=False, debug=False):
+    def __init__(self, groundTruth,port=0, train=False, debug=False):
         self.train = train
         self.debug = debug
+        self.gt = groundTruth
 
         # UDP socket and poller
         self.peer_addr = None
@@ -40,8 +42,7 @@ class Sender(object):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.sock.bind(('0.0.0.0', port))
-        sys.stderr.write('[sender] Listening on port %s\n' %
-                         self.sock.getsockname()[1])
+        sys.stderr.write('[sender] Listening on port %s\n' % self.sock.getsockname()[1])    #* hesy comment
 
         self.poller = select.poll()
         self.poller.register(self.sock, ALL_FLAGS)
@@ -211,7 +212,6 @@ class Sender(object):
                 if self.step_cnt >= Sender.max_steps:
                     self.step_cnt = 0
                     self.running = False
-
                     k=self.compute_performance()
         return k
     # 每轮结束后计算一个值
@@ -253,13 +253,15 @@ class Sender(object):
         return r
     # 稀疏奖励，which is 10*tput - perc_delay
     def compute_performance(self):
-        print("****************IN COMPUTE_PERFORMANCE*********************")
+        sys.stderr.write('\n****************IN COMPUTE_PERFORMANCE*********************\n')
+        # print("****************IN COMPUTE_PERFORMANCE*********************")
         duration = curr_ts_ms() - self.ts_first
         tput = 0.008 * self.delivered / duration
         perc_delay = np.percentile(self.rtt_buf, 95)
-        print(tput)
-        print(perc_delay)
+        sys.stderr.write('tput and tput/gt are: (%f,%f)\n' % (tput,tput/gt))
+        sys.stderr.write('perc_delay: %f\n' % perc_delay)
         return 10*tput - perc_delay
+        # return 100*(tput/self.gt) - perc_delay
 
         with open(path.join(project_root.DIR, 'env', 'perf'), 'a', 0) as perf:
             perf.write('%.2f %d\n' % (tput, perc_delay))

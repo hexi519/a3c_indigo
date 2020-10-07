@@ -1,3 +1,4 @@
+# -*- encoding: utf-8 -*-
 import os
 from os import path
 import sys
@@ -31,17 +32,18 @@ class Environment(object):
         self.port = get_open_udp_port()
 
         # start sender as an instance of Sender class
-        sys.stderr.write('Starting sender...\n')
+        # sys.stderr.write('Starting sender...\n')  
         self.sender = Sender(self.port, train=True)
         self.sender.set_sample_action(self.sample_action)
 
         # start receiver in a subprocess
-        sys.stderr.write('Starting receiver...\n')
+        # sys.stderr.write('Starting receiver...\n') #* hesy comment
         receiver_src = path.join(
             project_root.DIR, 'env', 'run_receiver.py')
         recv_cmd = 'python %s $MAHIMAHI_BASE %s' % (receiver_src, self.port)
         cmd = "%s -- sh -c '%s'" % (self.mahimahi_cmd, recv_cmd)
-        sys.stderr.write('$ %s\n' % cmd)
+        # sys.stderr.write('$ %s\n' % cmd)  #* hesy comment
+        sys.stderr.write('$ %s\n' % self.mahimahi_cmd)  #* hesy change to this instead
         self.receiver = Popen(cmd, preexec_fn=os.setsid, shell=True)
 
         # sender completes the handshake sent from receiver
@@ -50,7 +52,7 @@ class Environment(object):
     def rollout(self):
         """Run sender in env, get final reward of an episode, reset sender."""
 
-        sys.stderr.write('Obtaining an episode from environment...\n')
+        # sys.stderr.write('Obtaining an episode from environment...\n')    #* hesy comment
         return self.sender.run()   
 
     def cleanup(self):

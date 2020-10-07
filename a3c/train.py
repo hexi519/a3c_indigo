@@ -17,6 +17,9 @@ def run(args):
         host_list = args[job_name + '_list']   # e.g. ["hesy@127.0.0.1","hesy@127.0.0.1"]
         procs = args[job_name + '_procs']       # 目前为空
 
+        # if job_name=="worker":
+        #     sys.stderr.write('\nhesy debug:len of worker list is %d\n' % len(host_list))
+        
         for i in xrange(len(host_list)):
             # ssh_cmd = ["sshpass -p '8023' ssh", host_list[i]]
 
@@ -30,9 +33,9 @@ def run(args):
             if args['driver'] is not None:
                 cmd += ['--driver', args['driver']]
 
-            cmd = ssh_cmd + cmd
+            # cmd = ssh_cmd + cmd
 
-            sys.stderr.write('$ %s\n' % ' '.join(cmd))
+            # sys.stderr.write('$ %s\n' % ' '.join(cmd))
             procs.append(Popen(cmd, preexec_fn=os.setsid))
 
     # ps will block forever
@@ -52,7 +55,9 @@ def cleanup(args):
     pkill_script = path.join(args['rlcc_dir'], 'helpers', 'pkill.py')
 
     for host in host_set:
-        kill_cmd = ['ssh', host, 'python', pkill_script, args['rlcc_dir']]
+        # hesy change here to avoid passwords
+        # kill_cmd = ['ssh', host, 'python', pkill_script, args['rlcc_dir']]
+        kill_cmd = ['python', pkill_script, args['rlcc_dir']]
         sys.stderr.write('$ %s\n' % ' '.join(kill_cmd))
         call(kill_cmd)
 
@@ -106,10 +111,9 @@ def main():
         help='absolute path to RLCC/ (default: /home/hesy/pro/pan/a3c_indigo)')
     parser.add_argument('--dagger', action='store_true',
         help='run Dagger rather than A3C')
-    parser.add_argument('--driver', help='hostname of the driver')  # TODO
+    parser.add_argument('--driver', help='hostname of the driver') 
     prog_args = parser.parse_args()
     args = construct_args(prog_args)
-
     # run worker.py on ps and worker hosts
     try:
         run(args)

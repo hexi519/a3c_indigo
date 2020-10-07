@@ -29,6 +29,10 @@ class Receiver(object):
         # UDP socket and poller
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        if self.sock is None:
+            sys.stderr.write("[ERROR]create recv socket failes!\n")
+        else:
+            sys.stderr.write("[INFO]create recv socket on port %d\n" % port)
 
         self.poller = select.poll()
         self.poller.register(self.sock, ALL_FLAGS)

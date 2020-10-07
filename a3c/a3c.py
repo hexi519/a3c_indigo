@@ -1,3 +1,4 @@
+# -*- encoding: utf-8 -*-
 import sys
 import time
 import project_root
@@ -60,7 +61,7 @@ class A3C(object):
             self.check_point =1500 
             self.learn_rate = 1e-3
         else:
-            self.max_global_step = 30   # TODO　should be longer according to the graph
+            self.max_global_step = 10000   # TODO　should be longer according to the graph
             self.check_point = 10
             self.learn_rate = 2*1e-5
 
@@ -81,8 +82,13 @@ class A3C(object):
             make_sure_path_exists(self.logdir)
             self.summary_writer = tf.summary.FileWriter(self.logdir)
 
-        # create session
-        self.session = tf.Session(self.server.target) 
+        # create session 
+        # hesy add config to allow more GPU sources
+        config = tf.ConfigProto()  
+        config=tf.ConfigProto(
+        allow_soft_placement=True,
+        log_device_placement=False)
+        self.session = tf.Session(self.server.target,config=config)         # session 第一个承诺书
         self.session.run(tf.global_variables_initializer())
 
     def cleanup(self):
@@ -95,13 +101,14 @@ class A3C(object):
                 worker_device=self.worker_device,
                 cluster=self.cluster)):
             with tf.variable_scope('global'):
+                #? global_network用于当作被软更新的，local_network用于暂时地固定target
                 self.global_network = ActorCriticLSTM(
                     state_dim=self.state_dim, action_cnt=self.action_cnt)
                 self.global_step = tf.get_variable(
                     'global_step', [], tf.int32,
                     initializer=tf.constant_initializer(0, tf.int32),
                     trainable=False)
-        # TODO
+        #? 可以指定GPU还是CPU
         with tf.device(self.worker_device):
             with tf.variable_scope('local'):
                 self.local_network = ActorCriticLSTM(
@@ -110,11 +117,12 @@ class A3C(object):
             self.build_loss()
     # sparse_softmax_cross_entropy_with_logits 并记录变量total_loss/grad_global_norm/var_global_norm等
     def build_loss(self):
-        print("***************************IN BUILD_LOSS**************")
+        # print("***************************IN BUILD_LOSS**************")
+        sys.stderr.write('\n***************************IN BUILD_LOSS**************\n')
         pi = self.local_network
 
         self.actions = tf.placeholder(tf.int32, [None])
-        # cross entropy loss    # TODO sparse
+        # cross entropy loss    #? sparse_softmax_cross_entropy_with_logits
         cross_entropy_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
             logits=pi.action_scores, labels=self.actions)
 
@@ -146,24 +154,24 @@ class A3C(object):
             # total loss
             loss = policy_loss + 0.5 * value_loss - 0.01 * entropy
 
-        grads = tf.gradients(loss, pi.trainable_vars)
-        grads, _ = tf.clip_by_global_norm(grads, 10.0)  # TODO clip here
+        grads = tf.gradients(loss, pi.trainable_vars)     
+        grads, _ = tf.clip_by_global_norm(grads, 10.0)  #? clip here
 
         # calculate gradients and apply to global network
         grads_and_vars = list(zip(grads, self.global_network.trainable_vars))
-        inc_global_step = self.global_step.assign_add(1)    # 没有放进优化器里所以就手动... # TODO 放进去
+        inc_global_step = self.global_step.assign_add(1)    # 没有放进优化器里所以就手动... #? 放进去
 
         optimizer = tf.train.AdamOptimizer(self.learn_rate)
         self.train_op = tf.group(
             optimizer.apply_gradients(grads_and_vars), inc_global_step)
 
-        # sync local network to global network # TODO cover instead of update
+        # sync local network to global network # initialization  #! 也是很strange ，搞个两个网络
         self.sync_op = tf.group(*[v1.assign(v2) for v1, v2 in zip(
             pi.trainable_vars, self.global_network.trainable_vars)])
 
         # summary related
         tf.summary.scalar('total_loss', loss)
-        tf.summary.scalar('grad_global_norm', tf.global_norm(grads))    # TODO
+        tf.summary.scalar('grad_global_norm', tf.global_norm(grads))  
         tf.summary.scalar('var_global_norm', tf.global_norm(pi.trainable_vars))
 
         if self.dagger:
@@ -270,7 +278,8 @@ class A3C(object):
         sys.stderr.write('\nModel saved to worker-0:%s\n' % model_path)
     # 调用换几个的rollout(which 就是发包)，which调用了自己的sample_action,所以会存储不少东西
     def rollout(self):
-        print("************************IN ROLLOUT**************************")
+        sys.stderr.write('\n***************************IN ROLLOUT**************\n')
+        # print("************************IN ROLLOUT**************************")
         # reset buffers for states, actions, LSTM states, etc.
         self.state_buf = []
         self.indices = []
@@ -285,7 +294,7 @@ class A3C(object):
 
         # get an episode of rollout
         final_reward = self.env.rollout()
-        print(final_reward)
+        sys.stderr.write('final_reward is %f\n'%final_reward)
 
         # state_buf, indices, action_buf, etc. should have been filled in【环境在调用env的action的时候，写入了indices中】
         episode_len = len(self.indices)
